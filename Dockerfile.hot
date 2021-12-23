@@ -1,0 +1,11 @@
+FROM node:14.4
+ENV NPM_PROXY=https://in.humanrisk.cn:5300/repository/npm-proxy/
+WORKDIR /app
+COPY ./debian.sources.list /etc/apt/sources.list
+
+RUN apt-get update && apt-get install -y nginx
+RUN npm config set registry $NPM_PROXY
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

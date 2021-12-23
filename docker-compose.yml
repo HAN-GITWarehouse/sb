@@ -1,0 +1,157 @@
+version: "3.8"
+services:
+  backend:
+    build:
+      context: ./
+      dockerfile: Dockerfile.hot
+    stdin_open: true
+    tty: true
+    depends_on:
+      - games-api
+      - points-api
+    environment:
+      - TZ=Asia/Shanghai
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - 80:80
+    #      - 8080:8080
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    networks:
+      - net
+    working_dir: /app
+    volumes:
+      - ./.docker/conf/nginx/conf.d:/etc/nginx/sites-enabled
+  #      - ./app:/app
+
+  nio-pc:
+    image: uhub.service.ucloud.cn/humanrisk/01-games-nio-pc
+    working_dir: /app
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    depends_on:
+      - games-api
+      - points-api
+    networks:
+      - net
+    environment:
+      - TZ=Asia/Shanghai
+
+  mysql-admin:
+    image: phpmyadmin
+    restart: always
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    ports:
+      - 10156:80
+    networks:
+      - net
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=db
+      - PMA_PORTS=3306
+
+  games-api:
+    image: uhub.service.ucloud.cn/humanrisk/01-games-api:nio.v1.0
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    depends_on:
+      - redis
+      - db
+    networks:
+      - net
+    working_dir: /var/www
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - /d/workspace/api/src:/var/www
+      - ./.docker/conf/api/games.env:/var/www/.env
+
+  points-api:
+    image: uhub.service.ucloud.cn/humanrisk/01-points
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    depends_on:
+      - redis
+      - db
+    working_dir: /var/www
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - net
+    volumes:
+      - ./.docker/conf/api/points.env:/var/www/.env
+      # - /home/richard/work/01-points/api/src:/var/www
+
+  db:
+    image: mysql:5.6.33
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    networks:
+      - net
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_DATABASE: games_system
+      MYSQL_ROOT_PASSWORD: root
+      character-set-server: utf8mb4
+      collation-server: utf8mb4_unicode_ci
+    ports:
+      - 33069:3306
+    volumes:
+      - ./.docker/data/mysql:/var/lib/mysql
+
+  redis:
+    image: redis
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 223.5.5.5
+      - 223.6.6.6
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - net
+    volumes:
+      - ./.docker/data/redis:/data
+
+  queue:
+    image: uhub.service.ucloud.cn/humanrisk/01-games-api:nio.v1.0
+    restart: always
+    depends_on:
+      - db
+    networks:
+      - net
+    working_dir: /var/www
+    command: php artisan queue:work
+
+  crond:
+    image: uhub.service.ucloud.cn/humanrisk/01-games-api:nio.v1.0
+    restart: always
+    depends_on:
+      - db
+    networks:
+      - net
+    working_dir: /var/www
+    command: cron && tail -f /var/log/cron.log
+
+networks:
+  net:
+    driver: bridge
